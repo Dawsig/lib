@@ -1,5 +1,5 @@
 ```lua
-local Cresent = loadstring(game:HttpGet("https://your-host/CresentLibrary_Pro.lua"))()
+local Cresent = loadstring(game:HttpGet("https://raw.githubusercontent.com/Dawsig/lib/refs/heads/main/ui.lua"))()
 
 local Window = Cresent:CreateWindow({
     Title = "Cresent",
