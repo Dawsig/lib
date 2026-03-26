@@ -1,9 +1,68 @@
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local CoreGui = game:GetService("CoreGui")
-local Players = game:GetService("Players")
+local cloneref = (cloneref or clonereference or function(instance) return instance end)
 
+local TweenService = cloneref(game:GetService("TweenService"))
+local UserInputService = cloneref(game:GetService("UserInputService"))
+local RunService = cloneref(game:GetService("RunService"))
+local HttpService = cloneref(game:GetService("HttpService"))
+local CoreGui = cloneref(game:GetService("CoreGui"))
+local Players = cloneref(game:GetService("Players"))
+
+local function Get(url)
+	if writefile and game.HttpGet then
+		return game:HttpGet(url)
+	else
+		return HttpService:GetAsync(url)
+	end
+end
+
+-- [[ ICON MODULE ]] --
+local IconModule = {  
+	IconsType = "lucide",  
+	New = nil,  
+	IconThemeTag = nil,  
+	Icons = {  
+		lucide = loadstring(Get("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/lucide/dist/Icons.lua"))(),
+		solar = loadstring(Get("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/solar/dist/Icons.lua"))(),
+		craft = loadstring(Get("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/craft/dist/Icons.lua"))(),
+		geist = loadstring(Get("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/geist/dist/Icons.lua"))(),
+		sfsymbols = loadstring(Get("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/sfsymbols/dist/Icons.lua"))(),
+	}
+}  
+
+local function parseIconString(iconString)  
+	if type(iconString) == "string" then  
+		local splitIndex = iconString:find(":")  
+		if splitIndex then  
+			local iconType = iconString:sub(1, splitIndex - 1)  
+			local iconName = iconString:sub(splitIndex + 1)  
+			return iconType, iconName  
+		end  
+	end  
+	return nil, iconString  
+end  
+
+function IconModule.Icon(Icon, Type, DefaultFormat)
+	DefaultFormat = DefaultFormat ~= false
+	local iconType, iconName = parseIconString(Icon)  
+	local targetType = iconType or Type or IconModule.IconsType  
+	local targetName = iconName  
+	local iconSet = IconModule.Icons[targetType]  
+
+	if iconSet and iconSet.Icons and iconSet.Icons[targetName] then  
+		return {   
+			iconSet.Spritesheets[tostring(iconSet.Icons[targetName].Image)],   
+			iconSet.Icons[targetName],  
+		}  
+	elseif iconSet and iconSet[targetName] and string.find(iconSet[targetName], "rbxassetid://") then
+		return DefaultFormat and { 
+			iconSet[targetName], 
+			{ ImageRectSize = Vector2.new(0,0), ImageRectPosition = Vector2.new(0,0) }
+		} or iconSet[targetName]
+	end  
+	return nil  
+end  
+
+-- [[ CRESENT UI LIBRARY ]] --
 local Cresent = {}
 local Utility = {}
 
@@ -14,7 +73,7 @@ local Theme = {
 	Element = Color3.fromRGB(30, 30, 35),
 	Text = Color3.fromRGB(255, 255, 255),
 	SubText = Color3.fromRGB(170, 170, 175),
-	Accent = Color3.fromRGB(120, 160, 255), -- Beautiful Cresent Blue
+	Accent = Color3.fromRGB(120, 160, 255),
 	Outline = Color3.fromRGB(45, 45, 55)
 }
 
@@ -70,9 +129,7 @@ end
 function Cresent:Create(config)
 	local Title = config.Title or "Cresent"
 	local Desc = config.Description or "Premium UI"
-	local UseLoader = config.Config and config.Config.Loader or false
 
-	-- Cross-Executor GUI Parent Logic
 	local TargetParent = (gethui and gethui()) or (RunService:IsStudio() and Players.LocalPlayer:WaitForChild("PlayerGui")) or CoreGui
 
 	local ScreenGui = Utility:Create("ScreenGui", {
@@ -168,7 +225,6 @@ function Cresent:Create(config)
 
 	Utility:Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = AvatarFrame})
 
-	-- Safe Avatar Fetching
 	local avatarUrl = "rbxasset://textures/ui/GuiImagePlaceholder.png"
 	pcall(function()
 		avatarUrl = "rbxthumb://type=AvatarHeadShot&id=" .. Players.LocalPlayer.UserId .. "&w=48&h=48"
@@ -262,15 +318,20 @@ function Cresent:Create(config)
 	-- [[ TAB & ELEMENT CREATION ]] --
 	local Window = {Tabs = {}, ActiveTab = nil}
 
-	function Window:Tab(name)
+	-- [[ MODIFIED TAB FUNCTION WITH ICON SUPPORT ]] --
+	function Window:Tab(name, iconString)
 		local TabFunctions = {}
+		local IconImage = nil
+		
+		-- Adjust text padding if an icon is present
+		local buttonText = iconString and "          " .. name or "    " .. name
 		
 		local TabBtn = Utility:Create("TextButton", {
 			Parent = TabContainer,
 			BackgroundColor3 = Theme.Sidebar,
 			Size = UDim2.new(1, 0, 0, 36),
 			Font = Enum.Font.GothamBold,
-			Text = "    " .. name,
+			Text = buttonText,
 			TextColor3 = Theme.SubText,
 			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -278,6 +339,25 @@ function Cresent:Create(config)
 		})
 		
 		Utility:Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = TabBtn})
+		
+		-- [[ ICON CREATION LOGIC ]] --
+		if iconString then
+			local iconData = IconModule.Icon(iconString)
+			if iconData then
+				local isRbxAsset = typeof(iconData) == "string" and string.find(iconData, 'rbxassetid://')
+				
+				IconImage = Utility:Create("ImageLabel", {
+					Parent = TabBtn,
+					BackgroundTransparency = 1,
+					Position = UDim2.new(0, 12, 0.5, -8),
+					Size = UDim2.new(0, 16, 0, 16),
+					ImageColor3 = Theme.SubText,
+					Image = isRbxAsset and iconData or iconData[1],
+					ImageRectSize = isRbxAsset and Vector2.new(0,0) or iconData[2].ImageRectSize,
+					ImageRectOffset = isRbxAsset and Vector2.new(0,0) or iconData[2].ImageRectPosition,
+				})
+			end
+		end
 		
 		local TabIndicator = Utility:Create("Frame", {
 			Parent = TabBtn,
@@ -311,6 +391,9 @@ function Cresent:Create(config)
 			for _, tab in pairs(Window.Tabs) do
 				Utility:Tween(tab.Btn, TweenInfo.new(0.3), {BackgroundColor3 = Theme.Sidebar, TextColor3 = Theme.SubText})
 				Utility:Tween(tab.Indicator, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {Position = UDim2.new(0, -12, 0.2, 0)})
+				if tab.Icon then
+					Utility:Tween(tab.Icon, TweenInfo.new(0.3), {ImageColor3 = Theme.SubText})
+				end
 				tab.Page.Visible = false
 			end
 			
@@ -321,10 +404,15 @@ function Cresent:Create(config)
 			Utility:Tween(TabBtn, TweenInfo.new(0.3), {BackgroundColor3 = Theme.Element, TextColor3 = Theme.Text})
 			Utility:Tween(TabIndicator, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {Position = UDim2.new(0, 0, 0.2, 0)})
 			Utility:Tween(TabPage, TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
+			
+			-- Tween activated Icon
+			if IconImage then
+				Utility:Tween(IconImage, TweenInfo.new(0.3), {ImageColor3 = Theme.Text})
+			end
 		end
 		
 		TabBtn.MouseButton1Click:Connect(ActivateTab)
-		table.insert(Window.Tabs, {Btn = TabBtn, Page = TabPage, Indicator = TabIndicator})
+		table.insert(Window.Tabs, {Btn = TabBtn, Page = TabPage, Indicator = TabIndicator, Icon = IconImage})
 		if #Window.Tabs == 1 then ActivateTab() end
 
 		function TabFunctions:Section(text)
@@ -501,6 +589,16 @@ function Cresent:Create(config)
 				Size = UDim2.new(math.clamp((value - min) / (max - min), 0, 1), 0, 1, 0)
 			})
 			Utility:Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = SlideFill})
+
+			local SlideKnob = Utility:Create("Frame", {
+				Parent = SlideFill,
+				BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(1, 0, 0.5, 0),
+				Size = UDim2.new(0, 12, 0, 12)
+			})
+			Utility:Create("UICorner", {CornerRadius = UDim.new(1, 0), Parent = SlideKnob})
+			Utility:Create("UIStroke", {Parent = SlideKnob, Color = Theme.Outline, Thickness = 1})
 			
 			local Trigger = Utility:Create("TextButton", {
 				Parent = SlideBg,
@@ -536,6 +634,190 @@ function Cresent:Create(config)
 					dragging = false 
 				end
 			end)
+		end
+
+		function TabFunctions:Input(text, placeholder, callback)
+			callback = callback or function() end
+			
+			local InputFrame = Utility:Create("Frame", {
+				Parent = TabPage,
+				BackgroundColor3 = Theme.Element,
+				Size = UDim2.new(1, 0, 0, 42)
+			})
+			
+			Utility:Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = InputFrame})
+			Utility:Create("UIStroke", {Parent = InputFrame, Color = Theme.Outline, Thickness = 1})
+			
+			Utility:Create("TextLabel", {
+				Parent = InputFrame,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 15, 0, 0),
+				Size = UDim2.new(1, -150, 1, 0),
+				Font = Enum.Font.GothamMedium,
+				Text = text,
+				TextColor3 = Theme.Text,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left
+			})
+			
+			local TextBoxBg = Utility:Create("Frame", {
+				Parent = InputFrame,
+				BackgroundColor3 = Color3.fromRGB(20, 20, 24),
+				Position = UDim2.new(1, -125, 0.5, -14),
+				Size = UDim2.new(0, 115, 0, 28)
+			})
+			Utility:Create("UICorner", {CornerRadius = UDim.new(0, 4), Parent = TextBoxBg})
+			Utility:Create("UIStroke", {Parent = TextBoxBg, Color = Theme.Outline, Thickness = 1})
+			
+			local TextBox = Utility:Create("TextBox", {
+				Parent = TextBoxBg,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 8, 0, 0),
+				Size = UDim2.new(1, -16, 1, 0),
+				Font = Enum.Font.Gotham,
+				PlaceholderText = placeholder or "",
+				Text = "",
+				TextColor3 = Theme.Text,
+				PlaceholderColor3 = Theme.SubText,
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				ClearTextOnFocus = false
+			})
+			
+			TextBox.Focused:Connect(function()
+				Utility:Tween(TextBoxBg, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35)})
+			end)
+			
+			TextBox.FocusLost:Connect(function()
+				Utility:Tween(TextBoxBg, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(20, 20, 24)})
+				callback(TextBox.Text)
+			end)
+		end
+
+		function TabFunctions:Dropdown(text, options, default, callback)
+			options = options or {}
+			callback = callback or function() end
+			local selected = default or (options[1] or "")
+			local isDropped = false
+			
+			local DropdownFrame = Utility:Create("Frame", {
+				Parent = TabPage,
+				BackgroundColor3 = Theme.Element,
+				Size = UDim2.new(1, 0, 0, 42),
+				ClipsDescendants = true
+			})
+			
+			Utility:Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = DropdownFrame})
+			Utility:Create("UIStroke", {Parent = DropdownFrame, Color = Theme.Outline, Thickness = 1})
+			
+			local DropBtn = Utility:Create("TextButton", {
+				Parent = DropdownFrame,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 42),
+				Text = ""
+			})
+			
+			Utility:Create("TextLabel", {
+				Parent = DropBtn,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 15, 0, 0),
+				Size = UDim2.new(1, -150, 1, 0),
+				Font = Enum.Font.GothamMedium,
+				Text = text,
+				TextColor3 = Theme.Text,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left
+			})
+			
+			local SelectedLabel = Utility:Create("TextLabel", {
+				Parent = DropBtn,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(1, -135, 0, 0),
+				Size = UDim2.new(0, 100, 1, 0),
+				Font = Enum.Font.Gotham,
+				Text = selected,
+				TextColor3 = Theme.Accent,
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Right
+			})
+			
+			local ArrowIcon = Utility:Create("ImageLabel", {
+				Parent = DropBtn,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(1, -25, 0.5, -7),
+				Size = UDim2.new(0, 14, 0, 14),
+				Image = "rbxassetid://6031091004",
+				ImageColor3 = Theme.SubText
+			})
+			
+			local OptionsContainer = Utility:Create("Frame", {
+				Parent = DropdownFrame,
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0, 0, 0, 42),
+				Size = UDim2.new(1, 0, 1, -42)
+			})
+			
+			local OptionListLayout = Utility:Create("UIListLayout", {
+				Parent = OptionsContainer,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0, 4)
+			})
+			
+			Utility:Create("UIPadding", {
+				Parent = OptionsContainer,
+				PaddingTop = UDim.new(0, 4),
+				PaddingBottom = UDim.new(0, 8),
+				PaddingLeft = UDim.new(0, 10),
+				PaddingRight = UDim.new(0, 10)
+			})
+			
+			local function UpdateDropdownSize()
+				if isDropped then
+					local contentHeight = OptionListLayout.AbsoluteContentSize.Y + 12
+					Utility:Tween(DropdownFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 42 + contentHeight)})
+				else
+					Utility:Tween(DropdownFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 0, 42)})
+				end
+			end
+			
+			DropBtn.MouseButton1Click:Connect(function()
+				isDropped = not isDropped
+				UpdateDropdownSize()
+				Utility:Tween(ArrowIcon, TweenInfo.new(0.3), {Rotation = isDropped and 180 or 0})
+			end)
+			
+			for _, option in pairs(options) do
+				local OptBtn = Utility:Create("TextButton", {
+					Parent = OptionsContainer,
+					BackgroundColor3 = Theme.Sidebar,
+					Size = UDim2.new(1, 0, 0, 28),
+					AutoButtonColor = false,
+					Font = Enum.Font.Gotham,
+					Text = option,
+					TextColor3 = Theme.SubText,
+					TextSize = 12
+				})
+				Utility:Create("UICorner", {CornerRadius = UDim.new(0, 4), Parent = OptBtn})
+				
+				OptBtn.MouseEnter:Connect(function()
+					Utility:Tween(OptBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Outline, TextColor3 = Theme.Text})
+				end)
+				
+				OptBtn.MouseLeave:Connect(function()
+					Utility:Tween(OptBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Sidebar, TextColor3 = Theme.SubText})
+				end)
+				
+				OptBtn.MouseButton1Click:Connect(function()
+					selected = option
+					SelectedLabel.Text = selected
+					isDropped = false
+					UpdateDropdownSize()
+					Utility:Tween(ArrowIcon, TweenInfo.new(0.3), {Rotation = 0})
+					callback(selected)
+				end)
+			end
+			
+			if default then callback(default) end
 		end
 
 		return TabFunctions
